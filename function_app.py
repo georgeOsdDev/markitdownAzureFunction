@@ -1,5 +1,5 @@
 import azure.functions as func
-from markitdown import MarkItDown
+from markitdown import MarkItDown, FileConversionException, UnsupportedFormatException
 from openai import AzureOpenAI
 import os
 import logging
@@ -7,7 +7,7 @@ import tempfile
 
 default_supported_extensions = (
     '.pptx', '.docx', '.xlsx', '.pdf', '.csv', '.zip', '.html', '.htm'
-    # ".xml", ".rss", ".atom",'.ipynb', // not working
+    ".xml", ".rss", ".atom",'.ipynb', # not working
 )
 llm_supported_image_extensions = ('.jpg', '.jpeg', '.png')
 
@@ -32,7 +32,7 @@ app = func.FunctionApp()
 @app.blob_output(arg_name="outputblob", path="output/{blobname}.md", connection="markitdown_blobstorage")
 def blob_trigger(input: func.InputStream, outputblob: func.Out[str]):
 
-    # `{blobname}` is a placeholder for the name of the blob that triggered the function
+    # input.name will be "input/{blobname}" e.g. "input/test.docx"
     blobname = input.name.split("/")[-1]
 
     logging.info(f"New blob provided: {blobname}")
@@ -44,6 +44,12 @@ def blob_trigger(input: func.InputStream, outputblob: func.Out[str]):
         temp_file.flush()
         try:
             result = md.convert(temp_file.name)
+        except FileConversionException as fce:
+            logging.error(f"Error converting {blobname}: {fce}")
+            return
+        except UnsupportedFormatException as ufe:
+            logging.error(f"Error converting {blobname}: {ufe}")
+            return
         except Exception as e:
             logging.error(f"Error converting {blobname}: {e}")
             return
